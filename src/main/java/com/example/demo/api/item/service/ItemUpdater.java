@@ -1,22 +1,19 @@
 package com.example.demo.api.item.service;
 
+import com.example.demo.api.item.dto.internal.StockDecreaseContext;
 import com.example.demo.api.item.entity.SalesItem;
-import com.example.demo.api.item.repository.ItemRepository;
+import com.example.demo.api.item.entity.StockHistory;
+import com.example.demo.api.item.enums.StockHistoryType;
 import com.example.demo.api.item.repository.SalesItemRepository;
+import com.example.demo.api.item.repository.StockHistoryRepository;
 import com.example.demo.api.order.entity.Order;
 import com.example.demo.api.order.entity.OrderItem;
-import com.example.demo.api.order.repository.OrderItemRepository;
-import com.example.demo.api.order.repository.OrderRepository;
 import com.example.demo.common.exception.BadRequestException;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -24,63 +21,24 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Slf4j
 public class ItemUpdater {
-    private final ItemRepository itemRepository;
-    private final OrderRepository orderRepository;
-    private final OrderItemRepository orderItemRepository;
     private final SalesItemRepository salesItemRepository;
+    private final StockHistoryRepository stockHistoryRepository;
 
 
-    /**
-     * 재고 감소.
-     */
-
-    public void processStockOnOrder(String merchantOrderId){
-        // order 조회
-        Order order = orderRepository.findByMerchantOrderId(merchantOrderId).get();
-
-        // orderItem 조회
-        List<OrderItem> orderItems = orderItemRepository.findByOrderIdWithItem(order.getId());
-        List<Long> itemIds = orderItems.stream()
-                .map(orderItem -> orderItem.getItem().getId())
-                .toList();
-
-        // key: itemId, value: 구입 수량
-        Map<Long, Long> map1 = new HashMap<>();
-        orderItems.forEach(orderItem -> {
-            map1.put(orderItem.getOrder().getId(), orderItem.getQuantity());
-        });
-
-
-        // 각 item 에 대한 on salesItem 조회
-        List<SalesItem> salesItems = salesItemRepository.findOnSalesItemsByItemIdsWithItem(itemIds);
-
-
-        // key: itemId, value: (totalQuantity, perLimitQuantity)
-        Map<Long, StockLimit> map2 = new HashMap<>();
-        // key: itemId, value: salesItemId
-        Map<Long, Long> map3 = new HashMap<>();
-
-        salesItems.forEach(salesItem -> {
-            Long itemId = salesItem.getItem().getId();
-            StockLimit stockLimit = new StockLimit(salesItem.getTotalQuantity(), salesItem.getPerLimitQuantity());
-            map2.put(itemId, stockLimit);
-            map3.put(itemId, salesItem.getId());
-        });
-
-
-        // 재고 감소
+    @Transactional
+    public void decreaseStockForOrder(StockDecreaseContext context) {
+        Order order = context.order();
+        List<OrderItem> orderItems = context.orderItems();
+        Map<Long, SalesItem> itemIdToSalesItem = context.itemIdToSalesItem();
+        Map<Long, Long> itemIdToSalesItemId = context.itemIdToSalesItemId();
 
         orderItems.forEach(orderItem -> {
-
-            /*
-             * 트랜잭션 시작
-             * */
 
             Long itemId = orderItem.getItem().getId();
             Long requestStock = orderItem.getQuantity();
-
+    
             // 전체 재고
-            Long salesItemId = map3.get(itemId);
+            Long salesItemId = itemIdToSalesItemId.get(itemId); //
             Long affectedRows = salesItemRepository.decreaseStock(salesItemId, requestStock);
 
             if (affectedRows == 0) {
@@ -89,24 +47,41 @@ public class ItemUpdater {
 
             // 인당 재고
 
+            List<StockHistory> stockHistories = stockHistoryRepository.findByOrderIdAndSalesItemId(order.getId(), salesItemId);
+            long cnt=0;
+
+            for (StockHistory stockHistory : stockHistories) {
+                long tmpCnt = stockHistory.getChangeQuantity();
+                if(stockHistory.getStockHistoryType().equals(StockHistoryType.MINUS)){
+                    tmpCnt *= -1;
+                }
+
+                cnt += tmpCnt;
+
+            }
+
+            SalesItem salesItem = itemIdToSalesItem.get(itemId);
+            Long perLimitQuantity = salesItem.getPerLimitQuantity();
+
+            if(cnt+requestStock>perLimitQuantity){
+                throw new BadRequestException("인당 구매 개수 초과");
+            }
+
+
             // history insert
 
+            StockHistory stockHistory = StockHistory.builder()
+                    .changeQuantity(requestStock)
+                    .stockHistoryType(StockHistoryType.PLUS)
+                    .message("상품 구입")
+                    .salesItem(salesItem)
+                    .order(order)
+                    .build();
 
-            /*
-             * 트랜재션 종료
-             * */
-
+            stockHistoryRepository.save(stockHistory);
 
         });
-
     }
 
-
-    @Getter
-    @AllArgsConstructor
-    class StockLimit {
-        Long totalQuantity;
-        Long perLimitQuantity;
-    }
 
 }

@@ -1,6 +1,7 @@
 package com.example.demo.api.pay.service;
 
 import com.example.demo.api.order.repository.OrderRepository;
+import com.example.demo.api.order.service.OrderProcessor;
 import com.example.demo.api.pay.dto.internal.PaymentDTO;
 import com.example.demo.api.pay.dto.request.PaymentConfirmRequestDTO;
 import com.example.demo.api.pay.entity.Payment;
@@ -25,12 +26,14 @@ import static com.example.demo.common.response.ErrorStatus.*;
 @RequiredArgsConstructor
 @Slf4j
 public class PaymentService {
+    private final EnumSet<PaymentStatus> allowedStatuses = EnumSet.of(PaymentStatus.RETRY);
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
     private final PaymentCreator paymentCreator;
     private final TossPaymentClient tossPaymentClient;
     private final PaymentProcessor paymentProcessor;
-    private final EnumSet<PaymentStatus> allowedStatuses = EnumSet.of(PaymentStatus.RETRY);
+    private final OrderProcessor orderProcessor;
+
 
     /**
      * 결제 상태는 반드시 IN_PROGRESS 로 시작하여 성공(DONE), 실패(ABORTED, RETRY, EXPIRED), 타임아웃(TIMEOUT) 중 하나로 끝나야 한다.
@@ -78,6 +81,9 @@ public class PaymentService {
         /*
          * 여기에  update 가 필요한 검증.
          */
+
+
+        orderProcessor.processStockOnOrder(merchantOrderId);
 
         try{
             // 2

@@ -3,6 +3,8 @@ package com.example.demo.api.item.entity;
 import com.example.demo.api.item.enums.StockHistoryType;
 import com.example.demo.api.order.entity.Order;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -13,6 +15,8 @@ import static jakarta.persistence.GenerationType.IDENTITY;
 @Getter
 @Entity
 @NoArgsConstructor
+@Builder
+@AllArgsConstructor
 public class StockHistory {
     @Id @GeneratedValue(strategy = IDENTITY)
     @Column(name="stock_history_id")
