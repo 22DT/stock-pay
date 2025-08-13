@@ -21,7 +21,6 @@ public enum TossPaymentStatus {
 
     ALREADY_DONE("ALREADY_DONE"),
     ALREADY_CANCELED("ALREADY_CANCELED"),
-    RETRY("RETRY"),
     TIMEOUT("TIMEOUT"),
     UNKNOWN("UNKNOWN")
     ;

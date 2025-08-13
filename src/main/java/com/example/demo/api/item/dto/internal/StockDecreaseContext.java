@@ -9,15 +9,13 @@ import java.util.Map;
 
 public record StockDecreaseContext(
         Order order,
-        List<OrderItem> orderItems,
-        Map<Long, SalesItem> itemIdToSalesItem,
-        Map<Long, Long> itemIdToSalesItemId
+        List<SalesItem> salesItems,
+        Map<Long, OrderItem> salesItemIdToOrderItem
 ) {
     public static StockDecreaseContext of(Order order,
-                                          List<OrderItem> orderItems,
-                                          Map<Long, SalesItem> itemIdToSalesItem,
-                                          Map<Long, Long> itemIdToSalesItemId) {
-        return new StockDecreaseContext(order, orderItems, itemIdToSalesItem, itemIdToSalesItemId);
+                                          List<SalesItem> orderItems,
+                                          Map<Long, OrderItem> salesItemIdToOrderItem) {
+        return new StockDecreaseContext(order, orderItems, salesItemIdToOrderItem);
     }
 }
 

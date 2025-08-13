@@ -14,7 +14,7 @@ import static jakarta.persistence.GenerationType.IDENTITY;
 public class OrderItem {
 
     @Id @GeneratedValue(strategy = IDENTITY)
-    @Column(name="order_pass_archive_id")
+    @Column(name="order_item_id")
     private Long id;
 
     private Long quantity;

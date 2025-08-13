@@ -26,10 +26,8 @@ import static com.example.demo.common.response.ErrorStatus.*;
 @RequiredArgsConstructor
 @Slf4j
 public class PaymentService {
-    private final EnumSet<PaymentStatus> allowedStatuses = EnumSet.of(PaymentStatus.RETRY);
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
-    private final PaymentCreator paymentCreator;
     private final TossPaymentClient tossPaymentClient;
     private final PaymentProcessor paymentProcessor;
     private final OrderProcessor orderProcessor;
@@ -61,7 +59,7 @@ public class PaymentService {
      *
      */
 
-    public void requestConfirm(PaymentConfirmRequestDTO paymentConfirmRequestDTO) {
+    public void requestConfirm(Long buyerId, PaymentConfirmRequestDTO paymentConfirmRequestDTO) {
         String paymentKey = paymentConfirmRequestDTO.paymentKey();
         String merchantOrderId = paymentConfirmRequestDTO.merchantOrderId();
         String amount = paymentConfirmRequestDTO.amount();
@@ -70,20 +68,17 @@ public class PaymentService {
 
         amountValidate(amount, merchantOrderId);
 
-        Optional<Payment> findPayment=paymentRepository.findByPaymentKey((paymentKey));
-
-        findPayment.ifPresentOrElse(
-                this::validateExistingPaymentStatus,
-                () -> paymentCreator.create(paymentKey, merchantOrderId)
-        );
+        paymentRepository.findByPaymentKey(paymentKey)
+                .ifPresent(p -> {
+                    throw new BadRequestException("이미 존재하는 결제 정보입니다.");
+                });
 
 
         /*
          * 여기에  update 가 필요한 검증.
          */
 
-
-        orderProcessor.processStockOnOrder(merchantOrderId);
+        orderProcessor.processStockOnOrder(buyerId, merchantOrderId);
 
         try{
             // 2
@@ -100,10 +95,6 @@ public class PaymentService {
             paymentRepository.updatePaymentStatusByPaymentKey(paymentKey, PaymentStatus.ABORTED);
             throw e;
 
-        }catch (PaymentRetryableException e){
-            paymentRepository.updatePaymentStatusByPaymentKey(paymentKey, PaymentStatus.RETRY);
-            throw e;
-
         }catch(PaymentExpiredException e){
             paymentRepository.updatePaymentStatusByPaymentKey(paymentKey, PaymentStatus.EXPIRED);
             throw e;
@@ -114,22 +105,6 @@ public class PaymentService {
         }catch (Exception e){
             log.error("[requestConfirm][알 수 없는 오류]", e);
             throw e;
-        }
-    }
-
-    private void validateExistingPaymentStatus(Payment payment) {
-
-        PaymentStatus paymentStatus = payment.getPaymentStatus();
-
-        if (!allowedStatuses.contains(paymentStatus)) {
-            switch (paymentStatus) {
-                case IN_PROGRESS -> throw new BadRequestException(PAYMENT_IN_PROGRESS_EXCEPTION.getMessage());
-                case DONE -> throw new BadRequestException(PAYMENT_ALREADY_DONE_EXCEPTION.getMessage());
-                case EXPIRED -> throw new BadRequestException(PAYMENT_EXPIRED_EXCEPTION.getMessage());
-                case ABORTED -> throw new BadRequestException(PAYMENT_ABORTED_EXCEPTION.getMessage());
-                case TIMEOUT -> throw new BadRequestException(TIMEOUT_PAYMENT_EXCEPTION.getMessage());
-                default -> throw new BadRequestException(UNSUPPORTED_PAYMENT_STATUS_EXCEPTION.getMessage());
-            }
         }
     }
 

@@ -6,7 +6,6 @@ public enum PaymentStatus {
     CANCELED("CANCELED"),
     ABORTED("ABORTED"),
     EXPIRED("EXPIRED"),
-    RETRY("RETRY"),
     DONE_CANCELED("DONE_CANCELED"),
     TIMEOUT("TIMEOUT"),
     UNKNOWN("UNKNOWN")
@@ -27,7 +26,6 @@ public enum PaymentStatus {
             case CANCELED -> CANCELED;
             case ABORTED -> ABORTED;
             case EXPIRED -> EXPIRED;
-            case RETRY -> RETRY;
             case TIMEOUT -> TIMEOUT;
             default -> ABORTED; // 알 수 없는 건 일단 ABORTED 로
         };

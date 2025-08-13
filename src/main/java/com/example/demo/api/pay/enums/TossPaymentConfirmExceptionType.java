@@ -21,8 +21,6 @@ public enum TossPaymentConfirmExceptionType {
                     "ALREADY_PROCESSED_PAYMENT"
     )),
 
-    RETRY(PaymentRetryableException::new, Collections.emptySet()),
-
     ABORTED(PaymentAbortedException::new, Collections.emptySet()),
 
     EXPIRED(PaymentExpiredException::new, Set.of(
