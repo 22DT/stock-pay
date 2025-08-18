@@ -2,6 +2,8 @@ package com.example.demo.api.item.entity;
 
 import com.example.demo.api.item.enums.SalesItemStatus;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -14,6 +16,8 @@ import static jakarta.persistence.GenerationType.IDENTITY;
 @Getter
 @Entity
 @NoArgsConstructor
+@Builder
+@AllArgsConstructor
 public class SalesItem {
     @Id @GeneratedValue(strategy = IDENTITY)
     @Column(name="sales_item_id")
@@ -31,5 +35,4 @@ public class SalesItem {
     @ManyToOne(fetch=LAZY)
     @JoinColumn(name="item_id")
     private Item item;
-
 }

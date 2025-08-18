@@ -22,7 +22,7 @@ public class PaymentCreator {
 
     @Transactional
     public Payment create(String paymentKey, String orderId) {
-        Order order = orderRepository.findByOrderId(orderId)
+        Order order = orderRepository.findByMerchantOrderId(orderId)
                 .orElseThrow(() -> {
                     log.warn("[requestConfirm][주문도 안 했는데 벌써 결제를 해?][merchantOrderId= {}]", orderId);
                     return new BadRequestException(ALREADY_DONE_PAYMENT_BEFORE_ORDER_EXCEPTION.getMessage());

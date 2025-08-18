@@ -4,23 +4,18 @@ import com.example.demo.api.order.repository.OrderRepository;
 import com.example.demo.api.order.service.OrderProcessor;
 import com.example.demo.api.pay.dto.internal.PaymentDTO;
 import com.example.demo.api.pay.dto.request.PaymentConfirmRequestDTO;
-import com.example.demo.api.pay.entity.Payment;
 import com.example.demo.api.pay.enums.PaymentStatus;
 import com.example.demo.api.pay.exception.PaymentTimeoutException;
 import com.example.demo.api.pay.exception.confirm.PaymentAbortedException;
 import com.example.demo.api.pay.exception.confirm.PaymentAlreadyDoneException;
 import com.example.demo.api.pay.exception.confirm.PaymentExpiredException;
-import com.example.demo.api.pay.exception.confirm.PaymentRetryableException;
 import com.example.demo.api.pay.repository.PaymentRepository;
 import com.example.demo.common.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.EnumSet;
-import java.util.Optional;
-
-import static com.example.demo.common.response.ErrorStatus.*;
+import static com.example.demo.common.response.ErrorStatus.ALREADY_DONE_PAYMENT_BEFORE_ORDER_EXCEPTION;
 
 @Service
 @RequiredArgsConstructor

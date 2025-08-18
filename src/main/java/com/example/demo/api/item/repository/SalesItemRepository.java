@@ -19,6 +19,10 @@ public interface SalesItemRepository extends JpaRepository<SalesItem, Long> {
 
 
     @Modifying @Transactional
-    @Query("update SalesItem si set si.totalQuantity=si.totalQuantity-:quentity where si.id=:salesItemId and si.totalQuantity>=:quantity")
-    Long decreaseStock(@Param("salesItemId")Long salesItemId, @Param("quantity")Long quantity);
+    @Query("update SalesItem si set si.totalQuantity=si.totalQuantity-:quantity where si.id=:salesItemId and si.totalQuantity>=:quantity")
+    int decreaseStock(@Param("salesItemId")Long salesItemId, @Param("quantity")Long quantity);
+
+    @Modifying @Transactional
+    @Query("update SalesItem si set si.totalQuantity=si.totalQuantity+:quantity where si.id=:salesItemId and si.totalQuantity>=:quantity")
+    void incrementStock(@Param("salesItemId")Long salesItemId, @Param("quantity")Long quantity);
 }

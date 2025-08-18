@@ -17,6 +17,10 @@ public class Item {
     @Column(name="item_id")
     private Long id;
 
-
     private String itemName;
+
+
+    public Item(String itemName) {
+        this.itemName = itemName;
+    }
 }

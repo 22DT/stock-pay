@@ -2,7 +2,10 @@ package com.example.demo.api.order.service;
 
 import com.example.demo.api.item.dto.internal.StockDecreaseContext;
 import com.example.demo.api.item.entity.SalesItem;
+import com.example.demo.api.item.entity.StockHistory;
+import com.example.demo.api.item.enums.StockHistoryType;
 import com.example.demo.api.item.repository.SalesItemRepository;
+import com.example.demo.api.item.repository.StockHistoryRepository;
 import com.example.demo.api.item.service.ItemUpdater;
 import com.example.demo.api.member.entity.Member;
 import com.example.demo.api.member.repository.MemberRepository;
@@ -16,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -28,6 +32,7 @@ public class OrderProcessor {
     private final SalesItemRepository salesItemRepository;
     private final ItemUpdater itemUpdater;
     private final MemberRepository memberRepository;
+    private final StockHistoryRepository stockHistoryRepository;
 
 
     /**
@@ -97,6 +102,9 @@ public class OrderProcessor {
 
         // 판매중인 SalesItem 조회
         List<SalesItem> salesItems = salesItemRepository.findOnSalesItemsByItemIdsWithItem(itemIds);
+        // key: salesItemId value: salesItem
+        Map<Long, SalesItem> salesItemMap = salesItems.stream()
+                .collect(Collectors.toMap(SalesItem::getId, Function.identity()));
 
         // key: itemId, value: OrderItem
         Map<Long, OrderItem> itemIdToOrderItem = orderItems.stream()
@@ -112,26 +120,58 @@ public class OrderProcessor {
 
         // 실제 재고 감소 처리
 
-        StockDecreaseContext context = StockDecreaseContext.of(order, salesItems, salesItemIdToOrderItem);
+        Member buyer = memberRepository.findById(buyerId).get();
+        List<Long> okSalesItemIds = new ArrayList<>();
 
-        itemUpdater.decreaseStockForOrder(buyerId, context);
 
         salesItems.sort(Comparator.comparing(SalesItem::getId));
-
-        Member buyer = memberRepository.findById(buyerId).get();
 
         salesItems.forEach(salesItem -> {
             Long salesItemId = salesItem.getId();
             OrderItem orderItem = salesItemIdToOrderItem.get(salesItemId);
 
-            List<Long> okSalesItemIds = new ArrayList<>();
+
             try {
+                // 재고 감소
                 itemUpdater.decreaseStockForOrderPerItem(order, salesItem, orderItem, buyer);
 
+                // 성공한 거 기록
                 okSalesItemIds.add(salesItemId);
 
             } catch (BadRequestException e) { // 이거 재고 에러로 바꾸자.
                 //okSalesItemIds rollback 해야 함. 1) 전체 재고 2) 개인 재고
+
+                for (Long okSalesItemId : okSalesItemIds) {
+
+                    OrderItem orderItem1 = salesItemIdToOrderItem.get(okSalesItemId);
+                    Long quantity = orderItem1.getQuantity();
+
+
+                    /*
+                    * 트랜잭션 시작
+                    * */
+
+                    // 1) 전체 재고  증가.
+                    salesItemRepository.incrementStock(okSalesItemId, quantity);
+
+                    // 2) 개인 재고 감소
+                    SalesItem salesItem1 = salesItemMap.get(okSalesItemId);
+
+                    StockHistory stockHistory = StockHistory.builder()
+                            .changeQuantity(quantity)
+                            .stockHistoryType(StockHistoryType.MINUS)
+                            .message("다른 상품 실패로 인해 개인 재고 복구")
+                            .buyer(buyer)
+                            .salesItem(salesItem1)
+                            .order(order)
+                            .build();
+
+                    stockHistoryRepository.save(stockHistory);
+
+                    /*
+                     * 트랜잭션 끝
+                     * */
+                }
             }
 
         });

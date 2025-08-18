@@ -18,4 +18,6 @@ public class Member {
     @GeneratedValue(strategy = IDENTITY)
     @Column(name="member_id")
     private Long id;
+
+    private String name;
 }
