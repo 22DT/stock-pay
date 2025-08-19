@@ -2,15 +2,14 @@ package com.example.demo.api.order.service;
 
 import com.example.demo.api.item.dto.internal.StockDecreaseContext;
 import com.example.demo.api.item.entity.SalesItem;
-import com.example.demo.api.item.entity.StockHistory;
-import com.example.demo.api.item.enums.StockHistoryType;
 import com.example.demo.api.item.repository.SalesItemRepository;
-import com.example.demo.api.item.repository.StockHistoryRepository;
 import com.example.demo.api.item.service.ItemUpdater;
 import com.example.demo.api.member.entity.Member;
 import com.example.demo.api.member.repository.MemberRepository;
 import com.example.demo.api.order.entity.Order;
 import com.example.demo.api.order.entity.OrderItem;
+import com.example.demo.api.order.enums.OrderItemStatus;
+import com.example.demo.api.order.enums.OrderStatus;
 import com.example.demo.api.order.repository.OrderItemRepository;
 import com.example.demo.api.order.repository.OrderRepository;
 import com.example.demo.common.exception.BadRequestException;
@@ -18,8 +17,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -32,7 +33,6 @@ public class OrderProcessor {
     private final SalesItemRepository salesItemRepository;
     private final ItemUpdater itemUpdater;
     private final MemberRepository memberRepository;
-    private final StockHistoryRepository stockHistoryRepository;
 
 
     /**
@@ -76,6 +76,9 @@ public class OrderProcessor {
         StockDecreaseContext context = StockDecreaseContext.of(order, salesItems, salesItemIdToOrderItem);
 
         itemUpdater.decreaseStockForOrder(buyerId, context);
+
+        // order 상태 업데이트
+        orderRepository.updateStatus(order.getId(), OrderStatus.STOCK_PROCESSED);
     }
 
 
@@ -86,6 +89,8 @@ public class OrderProcessor {
 
         /*
          * 재고 감소 준비
+         *
+         * 구매할 상품과 얼마나 구입할지 찾아야 함.
          * */
 
         // 주문 조회
@@ -124,7 +129,7 @@ public class OrderProcessor {
         List<Long> okSalesItemIds = new ArrayList<>();
 
 
-        salesItems.sort(Comparator.comparing(SalesItem::getId));
+        salesItems.sort(Comparator.comparing(SalesItem::getId)); // 그렇게 의미는 없을 듯?
 
         salesItems.forEach(salesItem -> {
             Long salesItemId = salesItem.getId();
@@ -146,35 +151,31 @@ public class OrderProcessor {
                     OrderItem orderItem1 = salesItemIdToOrderItem.get(okSalesItemId);
                     Long quantity = orderItem1.getQuantity();
 
-
-                    /*
-                    * 트랜잭션 시작
-                    * */
-
-                    // 1) 전체 재고  증가.
-                    salesItemRepository.incrementStock(okSalesItemId, quantity);
-
-                    // 2) 개인 재고 감소
                     SalesItem salesItem1 = salesItemMap.get(okSalesItemId);
 
-                    StockHistory stockHistory = StockHistory.builder()
-                            .changeQuantity(quantity)
-                            .stockHistoryType(StockHistoryType.MINUS)
-                            .message("다른 상품 실패로 인해 개인 재고 복구")
-                            .buyer(buyer)
-                            .salesItem(salesItem1)
-                            .order(order)
-                            .build();
-
-                    stockHistoryRepository.save(stockHistory);
-
-                    /*
-                     * 트랜잭션 끝
-                     * */
+                    itemUpdater.rollbackStockPerItem(salesItem1, quantity, buyer, order, orderItem1.getId());
                 }
+
+                // 전체 - ok: 이것들은 실패 처리해줘야 함.
+                List<Long> salesItemIds = new ArrayList<>(salesItems.stream()
+                        .map(SalesItem::getId).toList());
+
+                salesItemIds.removeAll(okSalesItemIds);
+
+                salesItemIds.forEach((salesItemId1) ->{
+                    OrderItem orderItem2 = salesItemIdToOrderItem.get(salesItemId1);
+
+                    orderItemRepository.updateStatus(orderItem2.getId(), OrderItemStatus.CANCELLED);
+                });
+
+                orderRepository.updateStatus(order.getId(), OrderStatus.FAILED);
+
+                throw e;
             }
 
         });
 
+        // order 상태 업데이트
+        orderRepository.updateStatus(order.getId(), OrderStatus.STOCK_PROCESSED);
     }
 }

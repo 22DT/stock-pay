@@ -8,6 +8,8 @@ import com.example.demo.api.member.repository.MemberRepository;
 import com.example.demo.api.order.dto.request.OrderRequestDTO;
 import com.example.demo.api.order.entity.Order;
 import com.example.demo.api.order.entity.OrderItem;
+import com.example.demo.api.order.enums.OrderItemStatus;
+import com.example.demo.api.order.enums.OrderStatus;
 import com.example.demo.api.order.repository.OrderItemRepository;
 import com.example.demo.api.order.repository.OrderRepository;
 import com.example.demo.common.exception.BadRequestException;
@@ -78,6 +80,7 @@ public class OrderService {
                     .merchantOrderId(orderRequestDTO.merchantOrderId())
                     .amount(orderRequestDTO.amount())
                     .buyer(buyer)
+                    .status(OrderStatus.PENDING)
                     .build();
 
             orderId = orderRepository.save(order).getId();
@@ -99,7 +102,12 @@ public class OrderService {
 
         items.forEach(
                 (item) -> {
-                    OrderItem orderPassArchive = new OrderItem(map.get(item.getId()), order, item);
+                    OrderItem orderPassArchive = OrderItem.builder()
+                            .quantity(map.get(item.getId()))
+                            .status(OrderItemStatus.PENDING)
+                            .order(order)
+                            .item(item)
+                            .build();
 
                     orderItemRepository.save(orderPassArchive);
                 });

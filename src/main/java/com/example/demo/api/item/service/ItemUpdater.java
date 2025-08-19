@@ -10,6 +10,8 @@ import com.example.demo.api.member.entity.Member;
 import com.example.demo.api.member.repository.MemberRepository;
 import com.example.demo.api.order.entity.Order;
 import com.example.demo.api.order.entity.OrderItem;
+import com.example.demo.api.order.enums.OrderItemStatus;
+import com.example.demo.api.order.repository.OrderItemRepository;
 import com.example.demo.common.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +29,7 @@ public class ItemUpdater {
     private final SalesItemRepository salesItemRepository;
     private final StockHistoryRepository stockHistoryRepository;
     private final MemberRepository memberRepository;
+    private final OrderItemRepository orderItemRepository;
 
     /**
      * 실제 재고 감소
@@ -79,7 +82,7 @@ public class ItemUpdater {
      * end
      * // 트랜잭션 종료
      *
-     * -> 문제점: 데드락(상품 id 정렬, 데드락 감지 스레드, lock timoue, 트랜잭션 범위 줄인다), 지연(트랜잭션 범위 줄인다)
+     * -> 문제점: 데드락(상품 id 정렬, 데드락 감지 스레드, lock timoue, 트랜잭션 범위 줄인다), 지연(commit 할 때 lock 해제함. 트랜잭션 범위 줄인다)
      *
      * 방법 2. 트랜잭션 범위: 각 상품
      *
@@ -202,5 +205,34 @@ public class ItemUpdater {
 
         stockHistoryRepository.save(stockHistory);
 
+        // 재고 상태
+        orderItemRepository.updateStatus(orderItem.getId(), OrderItemStatus.SUCCESS);
     }
+
+
+    @Transactional
+    public void rollbackStockPerItem(SalesItem salesItem, Long quantity, Member buyer, Order order, Long orderItemId) {
+
+        Long salesItemId = salesItem.getId();
+
+        // 1) 전체 재고 증가 -> 이거 굳이 지금 해야 할까? 유저에게 빠르게 에러 응답하는 게 더 빠르지 않을까 생각해볼 것.
+        salesItemRepository.incrementStock(salesItemId, quantity);
+
+        // 2) 개인 재고 감소 기록
+
+        StockHistory stockHistory = StockHistory.builder()
+                .changeQuantity(quantity)
+                .stockHistoryType(StockHistoryType.MINUS) // 개인 재고 감소 (구매 취소)
+                .message("다른 상품 실패로 인해 개인 재고 복구")
+                .buyer(buyer)
+                .salesItem(salesItem)
+                .order(order)
+                .build();
+
+        stockHistoryRepository.save(stockHistory);
+
+        // 상태
+        orderItemRepository.updateStatus(orderItemId, OrderItemStatus.ROLLBACK_DONE);
+    }
+
 }

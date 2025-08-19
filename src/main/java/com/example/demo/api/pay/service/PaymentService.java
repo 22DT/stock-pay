@@ -73,7 +73,8 @@ public class PaymentService {
          * 여기에  update 가 필요한 검증.
          */
 
-        orderProcessor.processStockOnOrder(buyerId, merchantOrderId);
+        orderProcessor.processStockOnOrderV2(buyerId, merchantOrderId);
+
 
         try{
             // 2
