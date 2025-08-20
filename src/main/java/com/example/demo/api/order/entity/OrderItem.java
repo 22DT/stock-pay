@@ -37,9 +37,4 @@ public class OrderItem {
     private Item item;
 
 
-    public OrderItem(Long quantity, Order order, Item item) {
-        this.quantity = quantity;
-        this.order = order;
-        this.item = item;
-    }
 }

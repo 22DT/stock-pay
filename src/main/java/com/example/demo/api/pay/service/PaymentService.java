@@ -88,10 +88,12 @@ public class PaymentService {
             paymentProcessor.completePayment(paymentDTO);
 
         }catch (PaymentAbortedException e){
+            orderProcessor.stockRollback(buyerId, merchantOrderId);
             paymentRepository.updatePaymentStatusByPaymentKey(paymentKey, PaymentStatus.ABORTED);
             throw e;
 
         }catch(PaymentExpiredException e){
+            orderProcessor.stockRollback(buyerId, merchantOrderId);
             paymentRepository.updatePaymentStatusByPaymentKey(paymentKey, PaymentStatus.EXPIRED);
             throw e;
 

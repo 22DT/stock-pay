@@ -2,7 +2,9 @@ package com.example.demo.api.order.service;
 
 import com.example.demo.api.item.dto.internal.StockDecreaseContext;
 import com.example.demo.api.item.entity.SalesItem;
+import com.example.demo.api.item.entity.StockHistory;
 import com.example.demo.api.item.repository.SalesItemRepository;
+import com.example.demo.api.item.repository.StockHistoryRepository;
 import com.example.demo.api.item.service.ItemUpdater;
 import com.example.demo.api.member.entity.Member;
 import com.example.demo.api.member.repository.MemberRepository;
@@ -33,6 +35,7 @@ public class OrderProcessor {
     private final SalesItemRepository salesItemRepository;
     private final ItemUpdater itemUpdater;
     private final MemberRepository memberRepository;
+    private final StockHistoryRepository stockHistoryRepository;
 
 
     /**
@@ -146,6 +149,7 @@ public class OrderProcessor {
             } catch (BadRequestException e) { // 이거 재고 에러로 바꾸자.
                 //okSalesItemIds rollback 해야 함. 1) 전체 재고 2) 개인 재고
 
+                // roll back
                 for (Long okSalesItemId : okSalesItemIds) {
 
                     OrderItem orderItem1 = salesItemIdToOrderItem.get(okSalesItemId);
@@ -155,6 +159,7 @@ public class OrderProcessor {
 
                     itemUpdater.rollbackStockPerItem(salesItem1, quantity, buyer, order, orderItem1.getId());
                 }
+
 
                 // 전체 - ok: 이것들은 실패 처리해줘야 함.
                 List<Long> salesItemIds = new ArrayList<>(salesItems.stream()
@@ -177,5 +182,43 @@ public class OrderProcessor {
 
         // order 상태 업데이트
         orderRepository.updateStatus(order.getId(), OrderStatus.STOCK_PROCESSED);
+    }
+
+
+
+    // 결제 실패 시 해당 주문과 관련된 재고 전부 rollback 하는 메소드
+    public void stockRollback(Long buyerId, String merchantOrderId){
+
+        Member buyer = memberRepository.findById(buyerId).get();
+
+        // 주문 조회
+        Order order = orderRepository.findByMerchantOrderId(merchantOrderId).get();
+
+        // 주문 아이템 조회
+        List<OrderItem> orderItems = orderItemRepository.findByOrderIdWithItem(order.getId());
+        // key: itemId, value: OrderItem
+        Map<Long, OrderItem> itemIdToOrderItem = orderItems.stream()
+                .collect(Collectors.toMap(orderItem -> orderItem.getItem().getId(), Function.identity()));
+
+
+        // StockHistory 갖고 와야 함.
+        List<StockHistory> stockHistories = stockHistoryRepository.findByOrderIdAndBuyerIdWithSalesItemAndItem(order.getId(), buyerId);
+
+        stockHistories.stream()
+                .filter(stockHistory -> {
+                    SalesItem salesItem = stockHistory.getSalesItem();
+                    Long itemId = salesItem.getItem().getId();
+                    OrderItem orderItem = itemIdToOrderItem.get(itemId);
+                    return orderItem.getStatus().equals(OrderItemStatus.SUCCESS);
+                })
+                .forEach(stockHistory -> {
+                    SalesItem salesItem = stockHistory.getSalesItem();
+                    Long itemId = salesItem.getItem().getId();
+                    OrderItem orderItem = itemIdToOrderItem.get(itemId);
+
+                    Long quantity = stockHistory.getChangeQuantity();
+                    itemUpdater.rollbackStockPerItem(salesItem, quantity, buyer, order, orderItem.getId());
+                });
+
     }
 }
