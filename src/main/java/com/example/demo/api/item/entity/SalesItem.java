@@ -13,6 +13,13 @@ import static jakarta.persistence.EnumType.STRING;
 import static jakarta.persistence.FetchType.LAZY;
 import static jakarta.persistence.GenerationType.IDENTITY;
 
+/*
+* item 이랑 SalesItem 구분 이유.
+* 상품 자체는 변하지 않지만 판매 기간이나 가격 인당 재고 변할 수 있음. -> 업데이트 사이클이 다른 거 분리.
+* 할인 정책 등이 도입될 경우 -> item salesItem saleItemPrice 등으로 분리 가능.
+*
+* */
+
 @Getter
 @Entity
 @NoArgsConstructor

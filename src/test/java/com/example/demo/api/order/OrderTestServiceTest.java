@@ -40,7 +40,7 @@ class OrderTestServiceTest {
 
         itemQuantities.add(new OrderRequestDTO.ItemQuantity(1L, 5L));
         itemQuantities.add(new OrderRequestDTO.ItemQuantity(2L, 10L));
-        itemQuantities.add(new OrderRequestDTO.ItemQuantity(3L, 20L));
+        itemQuantities.add(new OrderRequestDTO.ItemQuantity(3L, 5L));
 
         orderService.createOrder(buyerId, new OrderRequestDTO(merchantOrderId, amount, itemQuantities));
 

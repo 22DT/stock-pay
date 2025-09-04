@@ -1,6 +1,5 @@
 package com.example.demo.api.item.service;
 
-import com.example.demo.api.item.dto.internal.StockDecreaseContext;
 import com.example.demo.api.item.entity.SalesItem;
 import com.example.demo.api.item.entity.StockHistory;
 import com.example.demo.api.item.enums.StockHistoryType;
@@ -11,16 +10,16 @@ import com.example.demo.api.member.repository.MemberRepository;
 import com.example.demo.api.order.entity.Order;
 import com.example.demo.api.order.entity.OrderItem;
 import com.example.demo.api.order.enums.OrderItemStatus;
+import com.example.demo.api.order.enums.OrderStatus;
 import com.example.demo.api.order.repository.OrderItemRepository;
+import com.example.demo.api.order.repository.OrderRepository;
 import com.example.demo.common.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
@@ -30,6 +29,7 @@ public class ItemUpdater {
     private final StockHistoryRepository stockHistoryRepository;
     private final MemberRepository memberRepository;
     private final OrderItemRepository orderItemRepository;
+    private final OrderRepository orderRepository;
 
     /**
      * 실제 재고 감소
@@ -119,54 +119,20 @@ public class ItemUpdater {
      */
 
     @Transactional
-    public void decreaseStockForOrder(Long buyerId, StockDecreaseContext context) {
+    public void decreaseStockForOrder(Long buyerId, Order order, List<OrderItem> orderItems) {
         Member buyer = memberRepository.findById(buyerId).get();
 
-        Order order = context.order();
-        List<SalesItem> salesItems = context.salesItems();
-        Map<Long, OrderItem> salesItemIdToOrderItem = context.salesItemIdToOrderItem();
+        orderItems.forEach(orderItem -> decreaseStockForOrderPerItem(order, orderItem, buyer));
 
-        salesItems.sort(Comparator.comparing(SalesItem::getId));
-
-
-        salesItems.forEach(salesItem -> {
-            Long salesItemId = salesItem.getId();
-
-            OrderItem orderItem = salesItemIdToOrderItem.get(salesItemId);
-            Long requestStock = orderItem.getQuantity();
-
-            // 전체 재고
-            int affectedRows = salesItemRepository.decreaseStock(salesItemId, requestStock);
-            if (affectedRows == 0) {throw new BadRequestException("재고 부족");}
-
-            // 인당 재고
-
-            Long currentPurchaseCount = stockHistoryRepository.getCurrentPurchaseCount(buyerId, salesItemId);
-
-            Long perLimitQuantity = salesItem.getPerLimitQuantity();
-
-            if (currentPurchaseCount + requestStock > perLimitQuantity) {
-                throw new BadRequestException("인당 구매 개수 초과");
-            }
-
-            // history insert
-
-            StockHistory stockHistory = StockHistory.builder()
-                    .changeQuantity(requestStock)
-                    .stockHistoryType(StockHistoryType.PLUS)
-                    .message("상품 구입")
-                    .buyer(buyer)
-                    .salesItem(salesItem)
-                    .order(order)
-                    .build();
-
-            stockHistoryRepository.save(stockHistory);
-        });
+        // order 상태 업데이트
+        orderRepository.updateStatus(order.getId(), OrderStatus.STOCK_PROCESSED);
     }
 
 
     @Transactional
-    public void decreaseStockForOrderPerItem(Order order,SalesItem salesItem, OrderItem orderItem, Member buyer){
+    public void decreaseStockForOrderPerItem(Order order, OrderItem orderItem, Member buyer){
+        SalesItem salesItem = orderItem.getSalesItem();
+
         log.info("[decreaseStockForOrderPerItem][call][buyerId= {}, salesItemId= {}]", buyer.getId(), salesItem.getId());
         Long salesItemId = salesItem.getId();
 

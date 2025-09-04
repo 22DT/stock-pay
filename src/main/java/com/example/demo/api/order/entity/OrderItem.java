@@ -1,6 +1,7 @@
 package com.example.demo.api.order.entity;
 
 import com.example.demo.api.item.entity.Item;
+import com.example.demo.api.item.entity.SalesItem;
 import com.example.demo.api.order.enums.OrderItemStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -36,5 +37,8 @@ public class OrderItem {
     @JoinColumn(name="item_id")
     private Item item;
 
+    @ManyToOne(fetch = LAZY )
+    @JoinColumn(name="sales_item_id")
+    private SalesItem salesItem;  // 갑자기 판매 item 이 바뀌면 가격 등 변경이 생길 수 있음?
 
 }

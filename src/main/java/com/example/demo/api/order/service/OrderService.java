@@ -2,7 +2,9 @@ package com.example.demo.api.order.service;
 
 
 import com.example.demo.api.item.entity.Item;
+import com.example.demo.api.item.entity.SalesItem;
 import com.example.demo.api.item.repository.ItemRepository;
+import com.example.demo.api.item.repository.SalesItemRepository;
 import com.example.demo.api.member.entity.Member;
 import com.example.demo.api.member.repository.MemberRepository;
 import com.example.demo.api.order.dto.request.OrderRequestDTO;
@@ -35,6 +37,7 @@ public class OrderService {
     private final MemberRepository memberRepository;
     private final ItemRepository itemRepository;
     private final OrderItemRepository orderItemRepository;
+    private final SalesItemRepository salesItemRepository;
 
     /*
     * c
@@ -95,10 +98,21 @@ public class OrderService {
         // key: itemId, value: quantity
         Map<Long, Long > map=new HashMap<>();
         itemQuantities.forEach(
-                (OrderRequestDTO.ItemQuantity itemQuantity) -> {
-            map.put(itemQuantity.itemId(), itemQuantity.quantity());
-        });
+                (OrderRequestDTO.ItemQuantity itemQuantity)
+                        -> map.put(itemQuantity.itemId(), itemQuantity.quantity())
+        );
 
+        List<SalesItem> salesItems = salesItemRepository.findOnSalesItemsByItemIdsWithItem(foundIds);
+
+        if(salesItems.size()!=foundIds.size()) {
+            log.warn("[createOrder][판매 off 된 상품이 있음.]");
+            throw new BadRequestException("판매 off 된 상품이 있음.");
+        }
+
+        // key: itemId, value: salesItem
+        Map<Long, SalesItem> salesItemMap=new HashMap<>();
+
+        salesItems.forEach((salesItem)-> salesItemMap.put(salesItem.getItem().getId(), salesItem));
 
         items.forEach(
                 (item) -> {
@@ -107,6 +121,7 @@ public class OrderService {
                             .status(OrderItemStatus.PENDING)
                             .order(order)
                             .item(item)
+                            .salesItem(salesItemMap.get(item.getId()))
                             .build();
 
                     orderItemRepository.save(orderPassArchive);
