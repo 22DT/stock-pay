@@ -1,5 +1,6 @@
 package com.example.demo.api.order;
 
+import com.example.demo.api.item.ItemTestService;
 import com.example.demo.api.item.service.ItemUpdater;
 import com.example.demo.api.order.dto.request.OrderRequestDTO;
 import com.example.demo.api.order.service.OrderProcessor;
@@ -10,8 +11,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.Rollback;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -22,6 +27,7 @@ class OrderTestServiceTest {
 
     @Autowired
     OrderProcessor orderProcessor;
+
 
 
     
@@ -53,4 +59,97 @@ class OrderTestServiceTest {
 
     }
 
+
+
+    @Test
+    void 방법1_데드락_테스트() throws InterruptedException {
+        Long buyerId = 1L;
+
+
+        // 재고 처리 스레드 실행
+        int threadCount = 100; // 동시에 실행할 스레드 수
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(threadCount);
+
+        for (int i = 0; i < threadCount; i++) {
+            int finalI = i;
+            executor.submit(() -> {
+                try {
+
+                    // 주문 생성
+                    String merchantOrderId= UUID.randomUUID().toString();
+                    String amount = "50000";
+                    List<OrderRequestDTO.ItemQuantity> itemQuantities = new ArrayList<>();
+
+                    itemQuantities.add(new OrderRequestDTO.ItemQuantity(1L, 1L));
+                    itemQuantities.add(new OrderRequestDTO.ItemQuantity(2L, 1L));
+                    itemQuantities.add(new OrderRequestDTO.ItemQuantity(3L, 1L));
+
+                    // 데드발 상생 유도하기 위해 순서 섞는다.
+
+                    orderService.createOrder(buyerId, new OrderRequestDTO(merchantOrderId, amount, itemQuantities));
+
+                    // 생성된 주문에 대해 재고 감소.
+
+                    orderProcessor.processStockOnOrder(buyerId, merchantOrderId);
+
+                } catch (Exception e) {
+                    System.out.println("예외");
+                    e.printStackTrace();
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+
+        latch.await(); // 모든 스레드 종료 대기
+        executor.shutdown();
+
+    }
+
+    @Test
+    void 방법2_데드락_해결() throws InterruptedException {
+        Long buyerId = 1L;
+
+
+        // 재고 처리 스레드 실행
+        int threadCount = 100; // 동시에 실행할 스레드 수
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(threadCount);
+
+        for (int i = 0; i < threadCount; i++) {
+            int finalI = i;
+            executor.submit(() -> {
+                try {
+
+                    // 주문 생성
+                    String merchantOrderId= UUID.randomUUID().toString();
+                    String amount = "50000";
+                    List<OrderRequestDTO.ItemQuantity> itemQuantities = new ArrayList<>();
+
+                    itemQuantities.add(new OrderRequestDTO.ItemQuantity(1L, 1L));
+                    itemQuantities.add(new OrderRequestDTO.ItemQuantity(2L, 1L));
+                    itemQuantities.add(new OrderRequestDTO.ItemQuantity(3L, 1L));
+
+                    // 데드발 상생 유도하기 위해 순서 섞는다.
+
+                    orderService.createOrder(buyerId, new OrderRequestDTO(merchantOrderId, amount, itemQuantities));
+
+                    // 생성된 주문에 대해 재고 감소.
+
+                    orderProcessor.processStockOnOrderV2(buyerId, merchantOrderId);
+
+                } catch (Exception e) {
+                    System.out.println("예외");
+                    e.printStackTrace();
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+
+        latch.await(); // 모든 스레드 종료 대기
+        executor.shutdown();
+
+    }
 }

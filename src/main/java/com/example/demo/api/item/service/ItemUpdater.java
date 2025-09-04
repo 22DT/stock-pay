@@ -132,10 +132,7 @@ public class ItemUpdater {
     @Transactional
     public void decreaseStockForOrderPerItem(Order order, OrderItem orderItem, Member buyer){
         SalesItem salesItem = orderItem.getSalesItem();
-
-        log.info("[decreaseStockForOrderPerItem][call][buyerId= {}, salesItemId= {}]", buyer.getId(), salesItem.getId());
         Long salesItemId = salesItem.getId();
-
         Long requestStock = orderItem.getQuantity();
 
         // 전체 재고
@@ -150,8 +147,6 @@ public class ItemUpdater {
         Long currentPurchaseCount = stockHistoryRepository.getCurrentPurchaseCount(buyer.getId(), salesItemId);
 
         Long perLimitQuantity = salesItem.getPerLimitQuantity();
-
-        log.info("[decreaseStockForOrderPerItem][currentPurchaseCount= {}, requestStock= {}, perLimitQuantity= {}]", currentPurchaseCount, requestStock, perLimitQuantity);
 
         if (currentPurchaseCount + requestStock > perLimitQuantity) {
             log.warn("[decreaseStockForOrderPerItem][인당 구매 개수 초과]");
@@ -200,5 +195,4 @@ public class ItemUpdater {
         // 상태
         orderItemRepository.updateStatus(orderItemId, OrderItemStatus.ROLLBACK_DONE);
     }
-
 }

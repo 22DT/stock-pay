@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -52,8 +53,13 @@ public class OrderProcessor {
         // 주문 아이템 조회
         List<OrderItem> orderItems = orderItemRepository.findByOrderIdWithSalesItemAndItem(order.getId());
 
+        // 데드락 확인할려고 섞는다.(데스트용임)
+        Collections.shuffle(orderItems);
+
         try {
+            // 재고 감소
             itemUpdater.decreaseStockForOrder(buyerId, order, orderItems);
+
         }catch (BadRequestException e){
 
             List<Long> orderItemIds = orderItems.stream()
@@ -86,6 +92,8 @@ public class OrderProcessor {
         // 주문 아이템 조회
         List<OrderItem> orderItems = orderItemRepository.findByOrderIdWithSalesItemAndItem(order.getId());
 
+        // 데드락 확인할려고 섞는다.(데스트용임)
+        Collections.shuffle(orderItems);
 
         // 실제 재고 감소 처리
 
@@ -167,6 +175,5 @@ public class OrderProcessor {
                     Long quantity = stockHistory.getChangeQuantity();
                     itemUpdater.rollbackStockPerItem(salesItem, quantity, buyer, order, orderItem.getId());
                 });
-
     }
 }
