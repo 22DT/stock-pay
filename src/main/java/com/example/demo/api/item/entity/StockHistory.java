@@ -13,6 +13,11 @@ import static jakarta.persistence.EnumType.STRING;
 import static jakarta.persistence.FetchType.LAZY;
 import static jakarta.persistence.GenerationType.IDENTITY;
 
+
+/**
+ * 유저 한 명이 여러 기기 등 다수의 세션을 접근 시 동시성 문제 있음 -> 간단한 로컬 캐시로 해결할 예정임,
+ */
+
 @Getter
 @Entity
 @NoArgsConstructor

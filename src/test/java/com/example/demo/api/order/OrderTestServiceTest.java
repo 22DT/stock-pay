@@ -1,7 +1,5 @@
 package com.example.demo.api.order;
 
-import com.example.demo.api.item.ItemTestService;
-import com.example.demo.api.item.service.ItemUpdater;
 import com.example.demo.api.order.dto.request.OrderRequestDTO;
 import com.example.demo.api.order.service.OrderProcessor;
 import com.example.demo.api.order.service.OrderService;
@@ -11,14 +9,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.Rollback;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 class OrderTestServiceTest {

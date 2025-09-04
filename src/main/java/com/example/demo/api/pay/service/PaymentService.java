@@ -1,6 +1,7 @@
 package com.example.demo.api.pay.service;
 
 import com.example.demo.api.order.repository.OrderRepository;
+import com.example.demo.api.order.service.BuyerSessionManager;
 import com.example.demo.api.order.service.OrderProcessor;
 import com.example.demo.api.pay.dto.internal.PaymentDTO;
 import com.example.demo.api.pay.dto.request.PaymentConfirmRequestDTO;
@@ -17,6 +18,32 @@ import org.springframework.stereotype.Service;
 
 import static com.example.demo.common.response.ErrorStatus.ALREADY_DONE_PAYMENT_BEFORE_ORDER_EXCEPTION;
 
+/**
+ * 결제 상태는 반드시 IN_PROGRESS 로 시작하여 성공(DONE), 실패(ABORTED, RETRY, EXPIRED), 타임아웃(TIMEOUT) 중 하나로 끝나야 한다.
+ *
+ * 1) 구입할 수 있는지 각종 검증: amount, 최초 요청 등
+ * 2) 결제 승인 api 호출
+ * 3) db 반영
+ *
+ *
+ * 1)
+ * amount 검증.
+ * 최초 요청 || RETRY 만 통과시킨다.
+ *
+ * 2) 결제 승인 api 호출
+ * 결제 승인 결과: 성공(ALREADY_DONE, DONE), 실패(ABORTED, RETRY, EXPIRED), 타임아웃(TIMEOUT)
+ * 실패: 결제 승인 x 확신 -> 상품 관련 만 rollback
+ * 타임아웃: 결제 승인 유무 모름 -> 후보정
+ *
+ * 3) db 반영
+ *
+ * =============
+ *
+ * 결제 승인 성공은 반드시 이 api 를 통해서만 할 것.
+ *
+ *
+ */
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -26,33 +53,8 @@ public class PaymentService {
     private final TossPaymentClient tossPaymentClient;
     private final PaymentProcessor paymentProcessor;
     private final OrderProcessor orderProcessor;
+    private final BuyerSessionManager buyerSessionManager;
 
-
-    /**
-     * 결제 상태는 반드시 IN_PROGRESS 로 시작하여 성공(DONE), 실패(ABORTED, RETRY, EXPIRED), 타임아웃(TIMEOUT) 중 하나로 끝나야 한다.
-     *
-     * 1) 구입할 수 있는지 각종 검증: amount, 최초 요청 등
-     * 2) 결제 승인 api 호출
-     * 3) db 반영
-     *
-     *
-     * 1)
-     * amount 검증.
-     * 최초 요청 || RETRY 만 통과시킨다.
-     *
-     * 2) 결제 승인 api 호출
-     * 결제 승인 결과: 성공(ALREADY_DONE, DONE), 실패(ABORTED, RETRY, EXPIRED), 타임아웃(TIMEOUT)
-     * 실패: 결제 승인 x 확신 -> 상품 관련 만 rollback
-     * 타임아웃: 결제 승인 유무 모름 -> 후보정
-     *
-     * 3) db 반영
-     *
-     * =============
-     *
-     * 결제 승인 성공은 반드시 이 api 를 통해서만 할 것.
-     *
-     *
-     */
 
     public void requestConfirm(Long buyerId, PaymentConfirmRequestDTO paymentConfirmRequestDTO) {
         String paymentKey = paymentConfirmRequestDTO.paymentKey();
@@ -69,18 +71,13 @@ public class PaymentService {
                 });
 
 
-        /*
-         * 여기에  update 가 필요한 검증.
-         */
-
-        orderProcessor.processStockOnOrder(buyerId, merchantOrderId);
 
 
         try{
-            // 2
-            PaymentDTO paymentDTO = tossPaymentClient.confirmPayment(paymentKey, merchantOrderId, Long.valueOf(amount));
+            buyerSessionManager.startSession(buyerId);
+            orderProcessor.processStockOnOrder(buyerId, merchantOrderId);
 
-            // 3
+            PaymentDTO paymentDTO = tossPaymentClient.confirmPayment(paymentKey, merchantOrderId, Long.valueOf(amount));
             paymentProcessor.completePayment(paymentDTO);
 
         }catch(PaymentAlreadyDoneException e){
@@ -103,6 +100,8 @@ public class PaymentService {
         }catch (Exception e){
             log.error("[requestConfirm][알 수 없는 오류]", e);
             throw e;
+        }finally {
+            buyerSessionManager.endSession(buyerId);
         }
     }
 
