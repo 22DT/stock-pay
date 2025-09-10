@@ -50,6 +50,7 @@ import static com.example.demo.common.response.ErrorStatus.ALREADY_DONE_PAYMENT_
 public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
+    private final PaymentCreator paymentCreator;
     private final TossPaymentClient tossPaymentClient;
     private final PaymentProcessor paymentProcessor;
     private final OrderProcessor orderProcessor;
@@ -66,11 +67,13 @@ public class PaymentService {
         amountValidate(amount, merchantOrderId);
 
         paymentRepository.findByPaymentKey(paymentKey)
-                .ifPresent(p -> {
-                    throw new BadRequestException("이미 존재하는 결제 정보입니다.");
-                });
-
-
+                .ifPresentOrElse(
+                        p -> {
+                            log.warn("[requestConfirm][paymentKey 이미 존재][paymentKey={}]", paymentKey);
+                            throw new BadRequestException("결제 처음부터 다시 하세요.");
+                        },
+                        () -> paymentCreator.create(paymentKey, merchantOrderId)
+                );
 
 
         try{

@@ -16,6 +16,7 @@ import static jakarta.persistence.GenerationType.IDENTITY;
 
 /**
  * 유저 한 명이 여러 기기 등 다수의 세션을 접근 시 동시성 문제 있음 -> 간단한 로컬 캐시로 해결할 예정임,
+ * 초기 insert 이후 update 방식이 제일 좋을 듯 싶음.
  */
 
 @Getter

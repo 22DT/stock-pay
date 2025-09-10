@@ -7,7 +7,6 @@ import com.example.demo.api.item.repository.ItemRepository;
 import com.example.demo.api.item.repository.SalesItemRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
