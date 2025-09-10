@@ -2,7 +2,6 @@ package com.example.demo.api.order.service;
 
 import com.example.demo.api.item.entity.SalesItem;
 import com.example.demo.api.item.entity.StockHistory;
-import com.example.demo.api.item.repository.StockHistoryRepository;
 import com.example.demo.api.item.service.ItemUpdater;
 import com.example.demo.api.member.entity.Member;
 import com.example.demo.api.member.repository.MemberRepository;

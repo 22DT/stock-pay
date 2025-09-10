@@ -1,10 +1,11 @@
 package com.example.demo.api.item.service;
 
+import com.example.demo.api.item.entity.MemberItemStock;
 import com.example.demo.api.item.entity.SalesItem;
 import com.example.demo.api.item.entity.StockHistory;
 import com.example.demo.api.item.enums.StockHistoryType;
+import com.example.demo.api.item.repository.MemberItemStockRepository;
 import com.example.demo.api.item.repository.SalesItemRepository;
-import com.example.demo.api.item.repository.StockHistoryRepository;
 import com.example.demo.api.member.entity.Member;
 import com.example.demo.api.member.repository.MemberRepository;
 import com.example.demo.api.order.entity.Order;
@@ -114,7 +115,7 @@ import java.util.List;
 @Slf4j
 public class ItemUpdater {
     private final SalesItemRepository salesItemRepository;
-    private final StockHistoryRepository stockHistoryRepository;
+    private final MemberItemStockRepository memberItemStockRepository;
     private final MemberRepository memberRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderRepository orderRepository;
@@ -147,31 +148,33 @@ public class ItemUpdater {
         }
 
         // 인당 재고
-
-        Long currentPurchaseCount = stockHistoryRepository.getCurrentPurchaseCount(buyer.getId(), salesItemId);
-
-        Long perLimitQuantity = salesItem.getPerLimitQuantity();
-
-        if (currentPurchaseCount + requestStock > perLimitQuantity) {
-            log.warn("[decreaseStockForOrderPerItem][인당 구매 개수 초과]");
-            throw new BadRequestException("인당 구매 개수 초과");
-        }
-
-        // history insert
-
-        StockHistory stockHistory = StockHistory.builder()
-                .changeQuantity(requestStock)
-                .stockHistoryType(StockHistoryType.PLUS)
-                .message("상품 구입")
-                .buyer(buyer)
-                .salesItem(salesItem)
-                .order(order)
-                .build();
-
-        stockHistoryRepository.save(stockHistory);
+        decreaseMemberItemStock(buyer,order, orderItem);
 
         // 재고 상태
         orderItemRepository.updateStatus(orderItem.getId(), OrderItemStatus.SUCCESS);
+    }
+
+    private void decreaseMemberItemStock(Member buyer,Order order, OrderItem orderItem){
+        SalesItem salesItem = orderItem.getSalesItem();
+        Long salesItemId = salesItem.getId();
+
+        // 조회
+        boolean b = memberItemStockRepository.existsByBuyerIdAndSalesItemId(buyer.getId(), salesItemId);
+        if(!b){         // 없으면
+            // insert  -> 바로 flush 되게? -> 유니크 중복은 commit 하고 터질라나? 아님 바로 터질라나?
+            MemberItemStock memberItemStock = MemberItemStock.builder()
+                    .remainingQuantity(salesItem.getPerLimitQuantity())
+                    .buyer(buyer)
+                    .salesItem(salesItem)
+                    .order(order)
+                    .build();
+            memberItemStockRepository.save(memberItemStock);
+            memberRepository.flush();
+        }
+
+        // 수량 감소
+
+
     }
 
 
@@ -184,6 +187,8 @@ public class ItemUpdater {
         salesItemRepository.incrementStock(salesItemId, quantity);
 
         // 2) 개인 재고 감소 기록
+
+
 
         StockHistory stockHistory = StockHistory.builder()
                 .changeQuantity(quantity)
