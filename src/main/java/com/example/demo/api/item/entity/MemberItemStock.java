@@ -44,7 +44,4 @@ public class MemberItemStock {
     @JoinColumn(name="sales_item_id")
     private SalesItem salesItem;
 
-    @ManyToOne(fetch=LAZY)
-    @JoinColumn(name="order_id")
-    private Order order ;
 }

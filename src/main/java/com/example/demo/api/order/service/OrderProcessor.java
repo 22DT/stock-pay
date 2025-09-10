@@ -1,7 +1,6 @@
 package com.example.demo.api.order.service;
 
 import com.example.demo.api.item.entity.SalesItem;
-import com.example.demo.api.item.entity.StockHistory;
 import com.example.demo.api.item.service.ItemUpdater;
 import com.example.demo.api.member.entity.Member;
 import com.example.demo.api.member.repository.MemberRepository;
@@ -31,7 +30,6 @@ public class OrderProcessor {
     private final OrderItemRepository orderItemRepository;
     private final ItemUpdater itemUpdater;
     private final MemberRepository memberRepository;
-    private final StockHistoryRepository stockHistoryRepository;
 
 
     /**
@@ -156,7 +154,7 @@ public class OrderProcessor {
                 .collect(Collectors.toMap(orderItem -> orderItem.getItem().getId(), Function.identity()));
 
 
-        // StockHistory 갖고 와야 함.
+       /* // StockHistory 갖고 와야 함.
         List<StockHistory> stockHistories = stockHistoryRepository.findByOrderIdAndBuyerIdWithSalesItemAndItem(order.getId(), buyerId);
 
         stockHistories.stream()
@@ -173,6 +171,6 @@ public class OrderProcessor {
 
                     Long quantity = stockHistory.getChangeQuantity();
                     itemUpdater.rollbackStockPerItem(salesItem, quantity, buyer, order, orderItem.getId());
-                });
+                });*/
     }
 }

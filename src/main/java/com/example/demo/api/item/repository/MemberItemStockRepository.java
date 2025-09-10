@@ -7,7 +7,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
+
 public interface MemberItemStockRepository extends JpaRepository<MemberItemStock, Long> {
+
+
+    @Query("select mis from MemberItemStock mis" +
+            " where mis.buyer.id=:buyerId and mis.salesItem.id =:salesItemId")
+    Optional<MemberItemStock> findByBuyerIdAndSalesItemId(@Param("buyerId") Long buyerId, @Param("salesItemId")Long salesItemId);
 
     @Query("select count(*)>0 from MemberItemStock mis" +
             " where mis.buyer.id=:buyerId and mis.salesItem.id =:salesItemId")
@@ -16,5 +23,10 @@ public interface MemberItemStockRepository extends JpaRepository<MemberItemStock
 
 
     @Modifying @Transactional
-    @Query("update MemberItemStock mis set mis.remainingQuantity=mis.remainingQuantity-:quen")
+    @Query("update MemberItemStock msi set msi.remainingQuantity=msi.remainingQuantity-:quantity where msi.id=:memberItemStockId and msi.remainingQuantity>=:quantity")
+    int decreaseStock(@Param("memberItemStockId")Long memberItemStockId, @Param("quantity")Long quantity);
+
+    @Modifying @Transactional
+    @Query("update MemberItemStock msi set msi.remainingQuantity=msi.remainingQuantity+:quantity where msi.id=:memberItemStockId")
+    void incrementStock(@Param("memberItemStockId")Long memberItemStockId, @Param("quantity")Long quantity);
 }
