@@ -18,9 +18,6 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -103,7 +100,7 @@ public class OrderProcessor {
 
             try {
                 // 재고 감소
-                itemUpdater.decreaseStockForOrderPerItem(order, orderItem, buyer);
+                itemUpdater.decreaseStockForOrderPerItem(orderItem, buyer);
 
                 // 성공한 거 기록
                 okOrderItems.add(orderItem);
@@ -116,7 +113,7 @@ public class OrderProcessor {
 
                     Long quantity = orderItem1.getQuantity();
 
-                    itemUpdater.rollbackStockPerItem(orderItem1.getSalesItem(), quantity, buyer, order, orderItem1.getId());
+                    itemUpdater.rollbackStockPerItem(orderItem1.getSalesItem(), quantity, buyer, orderItem1.getId());
                 }
 
                 // 나머지 실패 처리해줘야 함.
@@ -133,7 +130,6 @@ public class OrderProcessor {
 
         // order 상태 업데이트
         orderRepository.updateStatus(order.getId(), OrderStatus.STOCK_PROCESSED);
-
     }
 
 
@@ -148,29 +144,17 @@ public class OrderProcessor {
         Order order = orderRepository.findByMerchantOrderId(merchantOrderId).get();
 
         // 주문 아이템 조회
-        List<OrderItem> orderItems = orderItemRepository.findByOrderIdWithItem(order.getId());
-        // key: itemId, value: OrderItem
-        Map<Long, OrderItem> itemIdToOrderItem = orderItems.stream()
-                .collect(Collectors.toMap(orderItem -> orderItem.getItem().getId(), Function.identity()));
+        List<OrderItem> orderItems = orderItemRepository.findByOrderIdWithSalesItem(order.getId());
+
+        orderItems.stream()
+                .filter(orderItem -> orderItem.getStatus().equals(OrderItemStatus.SUCCESS))
+                .forEach(orderItem -> {
+                    SalesItem salesItem = orderItem.getSalesItem();
+                    Long quantity = orderItem.getQuantity();
+                    itemUpdater.rollbackStockPerItem(salesItem, quantity, buyer, orderItem.getId());
+                });
 
 
-       /* // StockHistory 갖고 와야 함.
-        List<StockHistory> stockHistories = stockHistoryRepository.findByOrderIdAndBuyerIdWithSalesItemAndItem(order.getId(), buyerId);
-
-        stockHistories.stream()
-                .filter(stockHistory -> {
-                    SalesItem salesItem = stockHistory.getSalesItem();
-                    Long itemId = salesItem.getItem().getId();
-                    OrderItem orderItem = itemIdToOrderItem.get(itemId);
-                    return orderItem.getStatus().equals(OrderItemStatus.SUCCESS);
-                })
-                .forEach(stockHistory -> {
-                    SalesItem salesItem = stockHistory.getSalesItem();
-                    Long itemId = salesItem.getItem().getId();
-                    OrderItem orderItem = itemIdToOrderItem.get(itemId);
-
-                    Long quantity = stockHistory.getChangeQuantity();
-                    itemUpdater.rollbackStockPerItem(salesItem, quantity, buyer, order, orderItem.getId());
-                });*/
+        orderRepository.updateStatus(order.getId(), OrderStatus.PAYMENT_FAILED_ROLLED_BACK);
     }
 }
