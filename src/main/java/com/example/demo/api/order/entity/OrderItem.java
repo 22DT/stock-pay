@@ -33,10 +33,6 @@ public class OrderItem {
     @JoinColumn(name="order_id")
     private Order order;
 
-    @ManyToOne(fetch = LAZY)
-    @JoinColumn(name="item_id")
-    private Item item;
-
     @ManyToOne(fetch = LAZY )
     @JoinColumn(name="sales_item_id")
     private SalesItem salesItem;  // 갑자기 판매 item 이 바뀌면 가격 등 변경이 생길 수 있음?

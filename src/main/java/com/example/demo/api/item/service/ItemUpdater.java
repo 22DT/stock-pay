@@ -123,18 +123,18 @@ public class ItemUpdater {
     public void decreaseStockForOrder(Long buyerId, Order order, List<OrderItem> orderItems) {
         Member buyer = memberRepository.findById(buyerId).get();
 
-        orderItems.forEach(orderItem -> doDecreaseStockForOrderPerItem(order, orderItem, buyer));
+        orderItems.forEach(orderItem -> doDecreaseStockForOrderPerItem(orderItem, buyer));
 
         // order 상태 업데이트
         orderRepository.updateStatus(order.getId(), OrderStatus.STOCK_PROCESSED);
     }
 
     @Transactional
-    public void decreaseStockForOrderPerItem(Order order, OrderItem orderItem, Member buyer){
-        doDecreaseStockForOrderPerItem(order, orderItem, buyer);
+    public void decreaseStockForOrderPerItem(OrderItem orderItem, Member buyer){
+        doDecreaseStockForOrderPerItem(orderItem, buyer);
     }
 
-    private void doDecreaseStockForOrderPerItem(Order order, OrderItem orderItem, Member buyer){
+    private void doDecreaseStockForOrderPerItem(OrderItem orderItem, Member buyer){
         SalesItem salesItem = orderItem.getSalesItem();
         Long salesItemId = salesItem.getId();
         Long requestStock = orderItem.getQuantity();
@@ -165,7 +165,6 @@ public class ItemUpdater {
                 .message("상품 구입")
                 .buyer(buyer)
                 .salesItem(salesItem)
-                .order(order)
                 .build();
 
         stockHistoryRepository.save(stockHistory);
@@ -176,7 +175,7 @@ public class ItemUpdater {
 
 
     @Transactional
-    public void rollbackStockPerItem(SalesItem salesItem, Long quantity, Member buyer, Order order, Long orderItemId) {
+    public void rollbackStockPerItem(SalesItem salesItem, Long quantity, Member buyer, Long orderItemId) {
 
         Long salesItemId = salesItem.getId();
 
@@ -191,7 +190,6 @@ public class ItemUpdater {
                 .message("다른 상품 실패로 인해 개인 재고 복구")
                 .buyer(buyer)
                 .salesItem(salesItem)
-                .order(order)
                 .build();
 
         stockHistoryRepository.save(stockHistory);

@@ -13,12 +13,6 @@ public interface StockHistoryRepository extends JpaRepository<StockHistory, Long
             " where sh.buyer.id=:buyerId and sh.salesItem.id=:salesItemId")
     List<StockHistory> findByBuyerIdAndSalesItemId(@Param("buyerId")Long buyerId, @Param("salesItemId") Long salesItemId);
 
-    @Query("select sh from StockHistory sh " +
-            "join fetch sh.salesItem si " +
-            "join fetch si.item " +
-            "where sh.order.id = :orderId and sh.buyer.id = :buyerId")
-    List<StockHistory> findByOrderIdAndBuyerIdWithSalesItemAndItem(@Param("orderId") Long orderId, @Param("buyerId") Long buyerId);
-
     @Query("select coalesce(sum(" +
             "case when sh.stockHistoryType='PLUS' then sh.changeQuantity" +
             " when sh.stockHistoryType='MINUS' then -sh.changeQuantity" +

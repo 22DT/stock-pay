@@ -120,7 +120,6 @@ public class OrderService {
                             .quantity(map.get(item.getId()))
                             .status(OrderItemStatus.PENDING)
                             .order(order)
-                            .item(item)
                             .salesItem(salesItemMap.get(item.getId()))
                             .build();
 
