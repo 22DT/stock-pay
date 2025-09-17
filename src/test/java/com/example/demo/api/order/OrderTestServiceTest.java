@@ -57,7 +57,7 @@ class OrderTestServiceTest {
 
 
     @Test
-    void 방법1_데드락_테스트() throws InterruptedException {
+    void 방법1_데드락_발생() throws InterruptedException {
         Long buyerId = 1L;
 
 
@@ -79,8 +79,6 @@ class OrderTestServiceTest {
                     itemQuantities.add(new OrderRequestDTO.ItemQuantity(1L, 1L));
                     itemQuantities.add(new OrderRequestDTO.ItemQuantity(2L, 1L));
                     itemQuantities.add(new OrderRequestDTO.ItemQuantity(3L, 1L));
-
-                    // 데드발 상생 유도하기 위해 순서 섞는다.
 
                     orderService.createOrder(buyerId, new OrderRequestDTO(merchantOrderId, amount, itemQuantities));
 
@@ -126,7 +124,6 @@ class OrderTestServiceTest {
                     itemQuantities.add(new OrderRequestDTO.ItemQuantity(2L, 1L));
                     itemQuantities.add(new OrderRequestDTO.ItemQuantity(3L, 1L));
 
-                    // 데드발 상생 유도하기 위해 순서 섞는다.
 
                     orderService.createOrder(buyerId, new OrderRequestDTO(merchantOrderId, amount, itemQuantities));
 

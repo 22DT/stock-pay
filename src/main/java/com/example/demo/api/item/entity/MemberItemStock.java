@@ -25,19 +25,16 @@ import static jakarta.persistence.GenerationType.IDENTITY;
 @Builder
 @AllArgsConstructor
 @Table(
-        indexes = {
-                @Index(name = "idx_stockhistory_buyer_salesitem", columnList = "buyer_id, sales_item_id"),
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uc_buyer_sales_item", columnNames = {"buyer_id", "sales_item_id"})
         }
 )
-public class StockHistory {
+public class MemberItemStock {
     @Id @GeneratedValue(strategy = IDENTITY)
-    @Column(name="stock_history_id")
+    @Column(name="member_item_stock_id")
     private Long id;
 
-    private Long changeQuantity;
-    @Enumerated(STRING)
-    private StockHistoryType stockHistoryType;
-    private String message; // 상품 구매 or 환불 or 결제 실패 시 다시 증가 등
+    private Long remainingQuantity;
 
     @ManyToOne(fetch = LAZY)
     @JoinColumn(name = "buyer_id")

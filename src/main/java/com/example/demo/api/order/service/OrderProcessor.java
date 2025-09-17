@@ -1,7 +1,6 @@
 package com.example.demo.api.order.service;
 
 import com.example.demo.api.item.entity.SalesItem;
-import com.example.demo.api.item.repository.StockHistoryRepository;
 import com.example.demo.api.item.service.ItemUpdater;
 import com.example.demo.api.member.entity.Member;
 import com.example.demo.api.member.repository.MemberRepository;
@@ -19,9 +18,6 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -31,7 +27,6 @@ public class OrderProcessor {
     private final OrderItemRepository orderItemRepository;
     private final ItemUpdater itemUpdater;
     private final MemberRepository memberRepository;
-    private final StockHistoryRepository stockHistoryRepository;
 
 
     /**
@@ -135,7 +130,6 @@ public class OrderProcessor {
 
         // order 상태 업데이트
         orderRepository.updateStatus(order.getId(), OrderStatus.STOCK_PROCESSED);
-
     }
 
 
@@ -160,5 +154,7 @@ public class OrderProcessor {
                     itemUpdater.rollbackStockPerItem(salesItem, quantity, buyer, orderItem.getId());
                 });
 
+
+        orderRepository.updateStatus(order.getId(), OrderStatus.PAYMENT_FAILED_ROLLED_BACK);
     }
 }

@@ -122,7 +122,6 @@ public class OrderService {
                             .order(order)
                             .salesItem(salesItemMap.get(item.getId()))
                             .build();
-
                     orderItemRepository.save(orderPassArchive);
                 });
     }

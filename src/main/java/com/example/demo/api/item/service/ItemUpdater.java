@@ -1,10 +1,9 @@
 package com.example.demo.api.item.service;
 
+import com.example.demo.api.item.entity.MemberItemStock;
 import com.example.demo.api.item.entity.SalesItem;
-import com.example.demo.api.item.entity.StockHistory;
-import com.example.demo.api.item.enums.StockHistoryType;
+import com.example.demo.api.item.repository.MemberItemStockRepository;
 import com.example.demo.api.item.repository.SalesItemRepository;
-import com.example.demo.api.item.repository.StockHistoryRepository;
 import com.example.demo.api.member.entity.Member;
 import com.example.demo.api.member.repository.MemberRepository;
 import com.example.demo.api.order.entity.Order;
@@ -114,7 +113,7 @@ import java.util.List;
 @Slf4j
 public class ItemUpdater {
     private final SalesItemRepository salesItemRepository;
-    private final StockHistoryRepository stockHistoryRepository;
+    private final MemberItemStockRepository memberItemStockRepository;
     private final MemberRepository memberRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderRepository orderRepository;
@@ -147,30 +146,37 @@ public class ItemUpdater {
         }
 
         // 인당 재고
-
-        Long currentPurchaseCount = stockHistoryRepository.getCurrentPurchaseCount(buyer.getId(), salesItemId);
-
-        Long perLimitQuantity = salesItem.getPerLimitQuantity();
-
-        if (currentPurchaseCount + requestStock > perLimitQuantity) {
-            log.warn("[decreaseStockForOrderPerItem][인당 구매 개수 초과]");
-            throw new BadRequestException("인당 구매 개수 초과");
-        }
-
-        // history insert
-
-        StockHistory stockHistory = StockHistory.builder()
-                .changeQuantity(requestStock)
-                .stockHistoryType(StockHistoryType.PLUS)
-                .message("상품 구입")
-                .buyer(buyer)
-                .salesItem(salesItem)
-                .build();
-
-        stockHistoryRepository.save(stockHistory);
+        decreaseMemberItemStock(buyer, orderItem);
 
         // 재고 상태
         orderItemRepository.updateStatus(orderItem.getId(), OrderItemStatus.SUCCESS);
+    }
+
+    private void decreaseMemberItemStock(Member buyer, OrderItem orderItem){
+        SalesItem salesItem = orderItem.getSalesItem();
+        Long salesItemId = salesItem.getId();
+
+        // 조회
+        boolean b = memberItemStockRepository.existsByBuyerIdAndSalesItemId(buyer.getId(), salesItemId);
+        if(!b){         // 없으면
+            // insert  -> 바로 flush 되게? -> 유니크 중복은 commit 하고 터질라나? 아님 바로 터질라나?
+            MemberItemStock memberItemStock = MemberItemStock.builder()
+                    .remainingQuantity(salesItem.getPerLimitQuantity())
+                    .buyer(buyer)
+                    .salesItem(salesItem)
+                    .build();
+            memberItemStockRepository.save(memberItemStock);
+            memberRepository.flush();
+        }
+
+        MemberItemStock memberItemStock = memberItemStockRepository.findByBuyerIdAndSalesItemId(buyer.getId(), salesItemId).get();
+
+        // 수량 감소
+        int affectedRows = memberItemStockRepository.decreaseStock(memberItemStock.getId(), orderItem.getQuantity());
+        if (affectedRows == 0) {
+            log.warn("[decreaseMemberItemStock][너는 구입할 만큼 했어.][orderItemId= {}]", orderItem.getId());
+            throw new BadRequestException("너는 구입할 만큼 했어.");
+        }
     }
 
 
@@ -182,17 +188,10 @@ public class ItemUpdater {
         // 1) 전체 재고 증가 -> 이거 굳이 지금 해야 할까? 유저에게 빠르게 에러 응답하는 게 더 빠르지 않을까 생각해볼 것.
         salesItemRepository.incrementStock(salesItemId, quantity);
 
-        // 2) 개인 재고 감소 기록
+        MemberItemStock memberItemStock = memberItemStockRepository.findByBuyerIdAndSalesItemId(buyer.getId(), salesItemId).get();
 
-        StockHistory stockHistory = StockHistory.builder()
-                .changeQuantity(quantity)
-                .stockHistoryType(StockHistoryType.MINUS) // 개인 재고 감소 (구매 취소)
-                .message("다른 상품 실패로 인해 개인 재고 복구")
-                .buyer(buyer)
-                .salesItem(salesItem)
-                .build();
-
-        stockHistoryRepository.save(stockHistory);
+        // 2) 개인 재고 증가
+        memberItemStockRepository.incrementStock(memberItemStock.getId(), quantity);
 
         // 상태
         orderItemRepository.updateStatus(orderItemId, OrderItemStatus.ROLLBACK_DONE);
