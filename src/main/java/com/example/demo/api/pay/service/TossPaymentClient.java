@@ -25,10 +25,17 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
+import reactor.util.retry.Retry;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 연결 타임아웃: 재시도 가능
@@ -48,6 +55,7 @@ public class TossPaymentClient {
     private static final String TOSS_PAYMENT_GET_URL = "/v1/payments/{paymentKey}";
     private static final String TOSS_PAYMENT_CANCEL_URL = "/v1/payments/{paymentKey}/cancel";
     private final RestTemplate restTemplate;
+    private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
     @Value("${toss.payments.secret-key}")
@@ -153,6 +161,31 @@ public class TossPaymentClient {
         throw e;
     }
 
+    /**
+     * 결제 요청 (non blocking)
+     */
+    public CompletableFuture<Void> confirmPaymentAsync(String paymentKey, String orderId, Long amount) {
+        log.info("[confirmPaymentAsync][start] paymentKey={}, orderId={}", paymentKey, orderId);
+
+        String encodedAuth = Base64.getEncoder().encodeToString((secretKey + ":").getBytes(StandardCharsets.UTF_8));
+
+        WebClient.RequestHeadersSpec<?> request = webClient.post()
+                .uri(TOSS_PAYMENT_CONFIRM_URL)
+                .header(HttpHeaders.AUTHORIZATION, "Basic " + encodedAuth)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .bodyValue(new TossPaymentConfirmRequestDTO(paymentKey, orderId, amount));
+
+
+        return request.retrieve()
+                .bodyToMono(TossPaymentResponseDTO.class)
+                .map(PaymentDTO::from)
+                .doOnNext(dto -> log.info("[confirmPaymentAsync][success] {}", dto))
+                .doOnError(e -> log.warn("[confirmPaymentAsync][error] {}", e.getMessage(), e))
+//                .flatMap(dto -> Mono.fromRunnable(() -> handleBusinessLogic(dto)))
+                .then()
+                .toFuture();
+    }
+
 
     /**
      * 결제 조회 요청
@@ -243,6 +276,38 @@ public class TossPaymentClient {
     public PaymentDTO recoverGetPaymentByPaymentKey(PaymentException e, String paymentKey) {
         throw e;
     }
+
+
+    /**
+     * 결제 조회 (non blocking)
+     */
+    public CompletableFuture<Void> getPaymentAsync(Long memberId) {
+        String paymentKey = "tviva20251022140747TrPL7";
+
+        log.info("[getPaymentAsync][start] paymentKey={}", paymentKey);
+
+        String encodedAuth = Base64.getEncoder().encodeToString((secretKey + ":").getBytes(StandardCharsets.UTF_8));
+
+        WebClient.RequestHeadersSpec<?> request = webClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path(TOSS_PAYMENT_GET_URL)
+                        .build(paymentKey))
+                .header(HttpHeaders.AUTHORIZATION, "Basic " + encodedAuth)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
+
+
+        return request.retrieve()
+                .bodyToMono(TossPaymentResponseDTO.class)
+                .map(PaymentDTO::from)
+                .doOnNext(dto -> log.info("[getPaymentAsync][success] {}", dto))
+                .doOnError(e -> log.warn("[getPaymentAsync][error] {}", e.getMessage(), e))
+                .publishOn(Schedulers.boundedElastic())
+//                .flatMap(dto -> Mono.fromRunnable(() -> handleBusinessLogic(dto, memberId)))
+                .then()
+                .toFuture();
+
+    }
+
 
 
     /**

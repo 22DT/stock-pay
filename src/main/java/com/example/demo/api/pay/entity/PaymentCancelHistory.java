@@ -14,6 +14,10 @@ import java.time.OffsetDateTime;
 
 import static jakarta.persistence.GenerationType.IDENTITY;
 
+/**
+ * 결제 승인, 취소 시 받는 정보가 달라서 분리
+ */
+
 @Entity
 @NoArgsConstructor
 @Getter
