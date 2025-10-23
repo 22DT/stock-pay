@@ -121,4 +121,54 @@ public class PaymentService {
             throw new BadRequestException("결제 처음부터 다시 시도.");
         }
     }
+
+    public void requestConfirmAsync(Long buyerId, PaymentConfirmRequestDTO paymentConfirmRequestDTO) {
+        String paymentKey = paymentConfirmRequestDTO.paymentKey();
+        String merchantOrderId = paymentConfirmRequestDTO.merchantOrderId();
+        String amount = paymentConfirmRequestDTO.amount();
+
+        // 1)
+
+        amountValidate(amount, merchantOrderId);
+
+        paymentRepository.findByPaymentKey(paymentKey)
+                .ifPresentOrElse(
+                        p -> {
+                            log.warn("[requestConfirm][paymentKey 이미 존재][paymentKey={}]", paymentKey);
+                            throw new BadRequestException("결제 처음부터 다시 하세요.");
+                        },
+                        () -> paymentCreator.create(paymentKey, merchantOrderId)
+                );
+
+
+        try{
+            buyerSessionManager.startSession(buyerId);
+            orderProcessor.processStockOnOrder(buyerId, merchantOrderId);
+
+            tossPaymentClient.confirmPaymentAsync(paymentKey, merchantOrderId, Long.valueOf(amount));
+
+        }catch(PaymentAlreadyDoneException e){
+            PaymentDTO paymentDTO = tossPaymentClient.getPaymentByPaymentKey(paymentKey);
+            paymentProcessor.completePayment(paymentDTO);
+
+        }catch (PaymentAbortedException e){
+            orderProcessor.stockRollback(buyerId, merchantOrderId);
+            paymentRepository.updatePaymentStatusByPaymentKey(paymentKey, PaymentStatus.ABORTED);
+            throw e;
+
+        }catch(PaymentExpiredException e){
+            orderProcessor.stockRollback(buyerId, merchantOrderId);
+            paymentRepository.updatePaymentStatusByPaymentKey(paymentKey, PaymentStatus.EXPIRED);
+            throw e;
+
+        }catch(PaymentTimeoutException e){
+            paymentRepository.updatePaymentStatusByPaymentKey(paymentKey, PaymentStatus.TIMEOUT);
+            throw e;
+        }catch (Exception e){
+            log.error("[requestConfirm][알 수 없는 오류]", e);
+            throw e;
+        }finally {
+            buyerSessionManager.endSession(buyerId);
+        }
+    }
 }

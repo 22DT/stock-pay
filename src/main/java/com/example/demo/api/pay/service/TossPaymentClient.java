@@ -1,7 +1,8 @@
 package com.example.demo.api.pay.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.demo.api.item.repository.ItemRepository;
+import com.example.demo.api.member.entity.Member;
+import com.example.demo.api.member.repository.MemberRepository;
 import com.example.demo.api.pay.dto.external.request.TossPaymentCancelRequestDTO;
 import com.example.demo.api.pay.dto.external.request.TossPaymentConfirmRequestDTO;
 import com.example.demo.api.pay.dto.external.response.TossPaymentResponseDTO;
@@ -13,6 +14,8 @@ import com.example.demo.api.pay.enums.TossPaymentGetExceptionType;
 import com.example.demo.api.pay.exception.PaymentException;
 import com.example.demo.api.pay.exception.PaymentTimeoutException;
 import com.example.demo.api.pay.exception.PaymentUnknownException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,14 +28,14 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
-import reactor.util.retry.Retry;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -57,6 +60,9 @@ public class TossPaymentClient {
     private final RestTemplate restTemplate;
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
+    private final PaymentUpdater paymentUpdater;
+    private final MemberRepository memberRepository;
+    private final ItemRepository itemRepository;
 
     @Value("${toss.payments.secret-key}")
     private String secretKey;
@@ -175,16 +181,104 @@ public class TossPaymentClient {
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .bodyValue(new TossPaymentConfirmRequestDTO(paymentKey, orderId, amount));
 
-
         return request.retrieve()
+                .onStatus(HttpStatusCode::is4xxClientError, response ->
+                        response.bodyToMono(String.class)
+                                .doOnNext(body -> log.error("[HTTP 4xx] {}", body))
+                                .then(Mono.error(new RuntimeException("클라이언트 오류 발생")))
+                )
+                .onStatus(HttpStatusCode::is5xxServerError, response ->
+                        response.bodyToMono(String.class)
+                                .doOnNext(body -> log.error("[HTTP 5xx] {}", body))
+                                .then(Mono.error(new RuntimeException("서버 오류 발생")))
+                )
                 .bodyToMono(TossPaymentResponseDTO.class)
+                .doOnNext(r -> log.info("[1] after retrieve"))
                 .map(PaymentDTO::from)
-                .doOnNext(dto -> log.info("[confirmPaymentAsync][success] {}", dto))
-                .doOnError(e -> log.warn("[confirmPaymentAsync][error] {}", e.getMessage(), e))
-//                .flatMap(dto -> Mono.fromRunnable(() -> handleBusinessLogic(dto)))
+                .doOnNext(dto -> log.info("[2] after map"))
+                .doOnNext(dto -> log.info("[3] after publishOn"))
+                .flatMap(dto -> Mono.fromRunnable(() -> paymentUpdater.updatePaymentAsDone(dto))
+                                .subscribeOn(Schedulers.boundedElastic())
+                )
                 .then()
                 .toFuture();
+
+
     }
+
+    private Mono<? extends Throwable> handle4xxError(ClientResponse response, String paymentKey) {
+        log.warn("[confirmPayment][4XX 에러][paymentKey={}]", paymentKey);
+
+
+        return response.bodyToMono(String.class)
+                .flatMap(body -> {
+                    try {
+                        JsonNode json = objectMapper.readTree(body);
+                        String code = json.path("code").asText();
+                        String message = json.path("message").asText();
+
+                        PaymentException paymentException = TossPaymentConfirmExceptionType.fromErrorCode(
+                                HttpStatus.resolve(response.statusCode().value()),
+                                code,
+                                message
+                        );
+
+                        return Mono.fromRunnable(() -> {
+                                    paymentUpdater.updatePaymentAsFailed(paymentKey); // 예시
+                                })
+                                .subscribeOn(Schedulers.boundedElastic()) // DB I/O는 블로킹 → boundedElastic
+                                .then(Mono.error(paymentException)); // 업데이트 끝나면 예외 발생시킴
+
+                    } catch (Exception e) {
+                        return Mono.fromRunnable(() -> {
+                                    paymentUpdater.updatePaymentAsFailed(paymentKey);
+                                })
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .then(Mono.error(new PaymentUnknownException(
+                                        HttpStatus.resolve(response.statusCode().value()),
+                                        "Failed to parse error response"
+                                )));
+                    }
+                });
+    }
+
+    private Mono<? extends Throwable> handle5xxError(ClientResponse response, String paymentKey) {
+        log.error("[confirmPayment][5XX 에러][paymentKey={}]", paymentKey);
+        return response.bodyToMono(String.class)
+                .flatMap(body -> {
+                    try {
+                        JsonNode json = objectMapper.readTree(body);
+                        String message = json.path("message").asText();
+                        return Mono.error(new PaymentTimeoutException(HttpStatus.resolve(response.statusCode().value()), message));
+                    } catch (Exception e) {
+                        return Mono.error(new PaymentUnknownException(HttpStatus.resolve(response.statusCode().value()), "Failed to parse error response"));
+                    }
+                });
+    }
+
+    private Mono<Void> handleFinal5xxError(Throwable throwable, String paymentKey) {
+        log.error("[confirmPayment][500/timeout 재시도 실패 최종 처리][paymentKey={}]", paymentKey);
+
+        if (throwable instanceof WebClientResponseException ex) {
+            HttpStatus status = HttpStatus.resolve(ex.getStatusCode().value());
+            String message;
+            try {
+                JsonNode json = objectMapper.readTree(ex.getResponseBodyAsString());
+                message = json.path("message").asText();
+            } catch (Exception parseEx) {
+                message = "Failed to parse error response";
+            }
+            return Mono.error(new PaymentTimeoutException(status, message));
+        }
+
+        if (throwable instanceof WebClientRequestException ex) {
+            return Mono.error(new PaymentTimeoutException(HttpStatus.REQUEST_TIMEOUT, ex.getMessage()));
+        }
+
+        return Mono.error(throwable);
+    }
+
+
 
 
     /**
@@ -302,7 +396,14 @@ public class TossPaymentClient {
                 .doOnNext(dto -> log.info("[getPaymentAsync][success] {}", dto))
                 .doOnError(e -> log.warn("[getPaymentAsync][error] {}", e.getMessage(), e))
                 .publishOn(Schedulers.boundedElastic())
-//                .flatMap(dto -> Mono.fromRunnable(() -> handleBusinessLogic(dto, memberId)))
+                .flatMap(dto -> Mono.fromRunnable(() ->{
+                    log.info("[BusinessLogic] 처리 완료, dto={}, memberId={}", dto, memberId);
+                    Member findMember = memberRepository.findById(memberId).get();
+                    log.info("[BusinessLogic][findMemberId= {}]", findMember.getId());
+                        }
+
+                ))
+
                 .then()
                 .toFuture();
 

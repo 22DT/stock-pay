@@ -2,6 +2,7 @@ package com.example.demo.api.pay.service;
 
 import com.example.demo.api.pay.dto.internal.PaymentDTO;
 import com.example.demo.api.pay.entity.Payment;
+import com.example.demo.api.pay.enums.PaymentStatus;
 import com.example.demo.api.pay.repository.PaymentRepository;
 import com.example.demo.common.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -27,5 +28,11 @@ public class PaymentUpdater {
                 });
 
         payment.updatePayment(paymentDTO);
+    }
+
+    @Transactional
+    public void updatePaymentAsFailed(String paymentKey) {
+        log.info("[updatePaymentAsFailed][결제 실패 상태로 변경][paymentKey={}]", paymentKey);
+        paymentRepository.updatePaymentStatusByPaymentKey(paymentKey, PaymentStatus.ABORTED);
     }
 }
