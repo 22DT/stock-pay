@@ -2,6 +2,8 @@ package com.example.demo.api.item.service;
 
 import com.example.demo.api.item.entity.MemberItemStock;
 import com.example.demo.api.item.entity.SalesItem;
+import com.example.demo.api.item.enums.SalesItemStatus;
+import com.example.demo.api.item.enums.SalesItemType;
 import com.example.demo.api.item.repository.MemberItemStockRepository;
 import com.example.demo.api.item.repository.SalesItemRepository;
 import com.example.demo.api.member.entity.Member;
@@ -15,6 +17,7 @@ import com.example.demo.api.order.repository.OrderRepository;
 import com.example.demo.common.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -117,23 +120,23 @@ public class ItemUpdater {
     private final MemberRepository memberRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderRepository orderRepository;
+    private final StringRedisTemplate stringRedisTemplate;
 
     @Transactional
-    public void decreaseStockForOrder(Long buyerId, Order order, List<OrderItem> orderItems) {
-        Member buyer = memberRepository.findById(buyerId).get();
+    public void decreaseStockForOrder(Order order, List<OrderItem> orderItems) {
 
-        orderItems.forEach(orderItem -> doDecreaseStockForOrderPerItem(orderItem, buyer));
+        orderItems.forEach(this::doDecreaseStockForOrderPerItem);
 
         // order 상태 업데이트
         orderRepository.updateStatus(order.getId(), OrderStatus.STOCK_PROCESSED);
     }
 
     @Transactional
-    public void decreaseStockForOrderPerItem(OrderItem orderItem, Member buyer){
-        doDecreaseStockForOrderPerItem(orderItem, buyer);
+    public void decreaseStockForOrderPerItem(OrderItem orderItem){
+        doDecreaseStockForOrderPerItem(orderItem);
     }
 
-    private void doDecreaseStockForOrderPerItem(OrderItem orderItem, Member buyer){
+    private void doDecreaseStockForOrderPerItem(OrderItem orderItem){
         SalesItem salesItem = orderItem.getSalesItem();
         Long salesItemId = salesItem.getId();
         Long requestStock = orderItem.getQuantity();
@@ -144,9 +147,6 @@ public class ItemUpdater {
             log.warn("[decreaseStockForOrderPerItem][재고 부족]");
             throw new BadRequestException("재고 부족");
         }
-
-        // 인당 재고
-        decreaseMemberItemStock(buyer, orderItem);
 
         // 재고 상태
         orderItemRepository.updateStatus(orderItem.getId(), OrderItemStatus.SUCCESS);
@@ -161,7 +161,7 @@ public class ItemUpdater {
         if(!b){         // 없으면
             // insert  -> 바로 flush 되게? -> 유니크 중복은 commit 하고 터질라나? 아님 바로 터질라나?
             MemberItemStock memberItemStock = MemberItemStock.builder()
-                    .remainingQuantity(salesItem.getPerLimitQuantity())
+//                    .remainingQuantity(salesItem.getPerLimitQuantity())
                     .buyer(buyer)
                     .salesItem(salesItem)
                     .build();
@@ -195,5 +195,44 @@ public class ItemUpdater {
 
         // 상태
         orderItemRepository.updateStatus(orderItemId, OrderItemStatus.ROLLBACK_DONE);
+    }
+
+
+    /**
+     * 인기 상품 올림
+     */
+    @Transactional
+    public Long promoteToHotItem(Long salesItemId){
+        /*
+        * 일반 상품 비활성화
+        * */
+        salesItemRepository.updateSalesItemStatus(salesItemId, SalesItemStatus.OFF);
+        SalesItem normalItem = salesItemRepository.findSalesItemsByIdWithItem(salesItemId).get();
+
+        /*
+        * 인기 상품 등록
+        * */
+        SalesItem popularItem = SalesItem.builder()
+                .remainingQuantity(normalItem.getRemainingQuantity())
+                .initialQuantity(normalItem.getRemainingQuantity())
+                .salesItemType(SalesItemType.POPULAR)
+                .salesItemStatus(SalesItemStatus.ON)
+                .item(normalItem.getItem())
+                .build();
+
+        Long popularItemId = salesItemRepository.save(popularItem).getId();
+
+
+        /*
+        * Redis 등록
+        * */
+
+        String redisKey = "SalesItem:" + popularItemId;
+        String redisValue = String.valueOf(popularItem.getRemainingQuantity());
+
+        stringRedisTemplate.opsForValue().set(redisKey, redisValue);
+
+        return popularItemId;
+
     }
 }

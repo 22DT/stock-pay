@@ -1,5 +1,6 @@
 package com.example.demo.api.item;
 
+import com.example.demo.api.item.service.RedisStockService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,6 +13,7 @@ class ItemTestServiceTest {
 
     @Autowired
     ItemTestService itemTestService;
+
 
 
 

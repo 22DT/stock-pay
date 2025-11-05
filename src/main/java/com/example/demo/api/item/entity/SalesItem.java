@@ -1,6 +1,7 @@
 package com.example.demo.api.item.entity;
 
 import com.example.demo.api.item.enums.SalesItemStatus;
+import com.example.demo.api.item.enums.SalesItemType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,11 +31,14 @@ public class SalesItem {
     @Column(name="sales_item_id")
     private Long id;
 
-    private Long totalQuantity;
-    private Long perLimitQuantity;
+    private Long initialQuantity;
+    private Long remainingQuantity;
 
     @Enumerated(STRING)
     private SalesItemStatus salesItemStatus;  // item 하나에 대해 'ON' 두 개 이상 절대 금지.
+
+    @Enumerated(STRING)
+    private SalesItemType salesItemType;
 
     private LocalDateTime salesStartDate;
     private LocalDateTime salesEndDate;

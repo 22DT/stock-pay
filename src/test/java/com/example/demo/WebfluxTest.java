@@ -2,6 +2,7 @@ package com.example.demo;
 
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -37,4 +38,35 @@ public class WebfluxTest {
 
                 .block();
     }
+
+    @Test
+    public void complexSignalFlow() {
+        Flux.just("A", "B", "C")
+                .doOnSubscribe(s -> log.info(" 구독 시작!"))
+
+                .map(v -> {
+                    log.info("map(): {} -> {}", v, v.toLowerCase());
+                    if (v.equals("B")) throw new RuntimeException(" B 처리 중 오류!");
+                    return v.toLowerCase();
+                })
+                .doOnNext(v -> log.info("doOnNext(): {}", v))
+
+                .flatMap(v -> Mono.just(v + "_flat")
+                        .doOnNext(x -> log.info("flatMap 내부: {}", x))
+                )
+                .doOnError(e -> log.error("onError 발생: {}", e.getMessage()))
+                .doOnComplete(() -> log.info(" 모든 처리 완료!"))
+                .onErrorResume(e -> {
+                    log.warn(" 복구 시도 중...");
+                    return Flux.just("fallback_1", "fallback_2");
+                })
+                .doFinally(signal -> log.info(" 종료 signal: {}", signal))
+
+                .subscribe(
+                        data -> log.info(" Subscriber 받은 데이터: {}", data),
+                        err -> log.error(" Subscriber 에러: {}", err.toString()),
+                        () -> log.info(" Subscriber onComplete() 호출됨")
+                );
+    }
+
 }

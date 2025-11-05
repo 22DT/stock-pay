@@ -32,8 +32,8 @@ public class ItemTestService {
 
         // saleItem
         SalesItem salesItem = SalesItem.builder()
-                .totalQuantity(totalQuantity)
-                .perLimitQuantity(perLimitQuantity)
+                .remainingQuantity(totalQuantity)
+                .initialQuantity(totalQuantity)
                 .salesItemStatus(SalesItemStatus.ON)
                 .item(item)
                 .build();

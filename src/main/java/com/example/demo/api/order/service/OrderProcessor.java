@@ -52,7 +52,7 @@ public class OrderProcessor {
 
         try {
             // 재고 감소
-            itemUpdater.decreaseStockForOrder(buyerId, order, orderItems);
+            itemUpdater.decreaseStockForOrder(order, orderItems);
 
         }catch (BadRequestException e){
 
@@ -100,7 +100,7 @@ public class OrderProcessor {
 
             try {
                 // 재고 감소
-                itemUpdater.decreaseStockForOrderPerItem(orderItem, buyer);
+                itemUpdater.decreaseStockForOrderPerItem(orderItem);
 
                 // 성공한 거 기록
                 okOrderItems.add(orderItem);
